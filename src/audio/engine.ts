@@ -5,6 +5,7 @@ class AudioEngine {
   public ctx: AudioContext | null = null;
   public masterGain: GainNode | null = null;
   public analyser: AnalyserNode | null = null;
+  public synthEnabled: boolean = true;
   
   private delayNode: DelayNode | null = null;
   private delayFeedbackGain: GainNode | null = null;
@@ -356,6 +357,7 @@ class AudioEngine {
     volume: number = 1.0,
     pan: number = 0
   ) {
+    if (!this.synthEnabled) return;
     const ctx = this.ensureContext();
     const freq = noteToFreq(note);
 
@@ -554,14 +556,20 @@ class AudioEngine {
 
           if (track.type === 'synth') {
             const note = step.note || 'C3';
-            if (track.sound === 'bass') {
-              this.renderOfflineSynth(offlineCtx, stepTime, transposeNote(note, -12), secondsPerStep * 0.9, synthSettings, vol);
-            } else if (track.sound === 'piano_chord') {
-              this.renderOfflineSynth(offlineCtx, stepTime, note, secondsPerStep * 0.9, synthSettings, vol);
-              this.renderOfflineSynth(offlineCtx, stepTime, transposeNote(note, 4), secondsPerStep * 0.9, synthSettings, vol * 0.8);
-              this.renderOfflineSynth(offlineCtx, stepTime, transposeNote(note, 7), secondsPerStep * 0.9, synthSettings, vol * 0.8);
-            } else {
-              this.renderOfflineSynth(offlineCtx, stepTime, note, secondsPerStep * 0.9, synthSettings, vol);
+              if (track.sound === 'bass') {
+                if (this.synthEnabled) {
+                  this.renderOfflineSynth(offlineCtx, stepTime, transposeNote(note, -12), secondsPerStep * 0.9, synthSettings, vol);
+                }
+              } else if (track.sound === 'piano_chord') {
+                if (this.synthEnabled) {
+                  this.renderOfflineSynth(offlineCtx, stepTime, note, secondsPerStep * 0.9, synthSettings, vol);
+                  this.renderOfflineSynth(offlineCtx, stepTime, transposeNote(note, 4), secondsPerStep * 0.9, synthSettings, vol * 0.8);
+                  this.renderOfflineSynth(offlineCtx, stepTime, transposeNote(note, 7), secondsPerStep * 0.9, synthSettings, vol * 0.8);
+                }
+              } else {
+                if (this.synthEnabled) {
+                  this.renderOfflineSynth(offlineCtx, stepTime, note, secondsPerStep * 0.9, synthSettings, vol);
+                }
             }
           } else {
             this.renderOfflineDrum(offlineCtx, stepTime, track.sound, vol);

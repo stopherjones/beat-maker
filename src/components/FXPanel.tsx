@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { Sliders, Sparkles, Waves, Flame, Radio } from 'lucide-react';
 import { FXSettings } from '../types';
 import { Visualizer } from './Visualizer';
@@ -14,15 +14,29 @@ export const FXPanel: React.FC<FXPanelProps> = ({ fx, onChange, isPlaying }) => 
     onChange({ ...fx, [key]: value });
   };
 
-  const handleClearAllFX = () => {
-    onChange({
-      delayTime: fx.delayTime || 0.2,
-      delayFeedback: 0,
-      delayMix: 0,
-      reverbDecay: fx.reverbDecay || 1.5,
-      reverbMix: 0,
-      distortion: 0,
-    });
+  const [fxBypassed, setFxBypassed] = useState(false);
+  const savedFxRef = useRef<FXSettings | null>(null);
+
+  const handleToggleFxBypass = () => {
+    if (!fxBypassed) {
+      // save current fx and set mixes to zero
+      savedFxRef.current = fx;
+      onChange({
+        delayTime: fx.delayTime || 0.2,
+        delayFeedback: 0,
+        delayMix: 0,
+        reverbDecay: fx.reverbDecay || 1.5,
+        reverbMix: 0,
+        distortion: 0,
+      });
+      setFxBypassed(true);
+    } else {
+      // restore saved fx if present
+      if (savedFxRef.current) {
+        onChange(savedFxRef.current);
+      }
+      setFxBypassed(false);
+    }
   };
 
   const hasActiveFX = fx.delayMix > 0 || fx.reverbMix > 0 || fx.distortion > 0;
@@ -40,15 +54,15 @@ export const FXPanel: React.FC<FXPanelProps> = ({ fx, onChange, isPlaying }) => 
 
         <div className="flex items-center gap-2">
           <button
-            onClick={handleClearAllFX}
+            onClick={handleToggleFxBypass}
             className={`px-2.5 py-1 rounded-lg text-xs font-mono transition border ${
-              !hasActiveFX
+              fxBypassed || !hasActiveFX
                 ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 font-bold'
                 : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border-zinc-700'
             }`}
-            title="Set all effect mixes and distortion to zero (100% dry sound)"
+            title="Toggle FX bypass (dry/wet)"
           >
-            {!hasActiveFX ? '✓ FX Off (Pure Dry)' : 'Clear / Turn Off All FX'}
+            {fxBypassed || !hasActiveFX ? '✓ FX Off (Bypassed)' : 'Bypass All FX'}
           </button>
           <span className="text-xs font-mono text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2.5 py-0.5 rounded-full hidden sm:inline-block">
             Delay + Reverb + Overdrive

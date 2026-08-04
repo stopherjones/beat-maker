@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Sliders, Activity, Disc, Zap, Volume2 } from 'lucide-react';
 import { SynthSettings, SynthWaveform, ScaleName } from '../types';
 import { SCALES, noteToFreq } from '../utils/music';
@@ -11,6 +11,7 @@ interface SynthPanelProps {
 }
 
 export const SynthPanel: React.FC<SynthPanelProps> = ({ synth, onChange, selectedScale }) => {
+  const [synthBypassed, setSynthBypassed] = useState<boolean>(() => !audioEngine.synthEnabled);
   const waveforms: SynthWaveform[] = ['sawtooth', 'square', 'sine', 'triangle'];
 
   const updateField = <K extends keyof SynthSettings>(key: K, value: SynthSettings[K]) => {
@@ -50,9 +51,24 @@ export const SynthPanel: React.FC<SynthPanelProps> = ({ synth, onChange, selecte
           </div>
           <h2 className="font-bold text-sm tracking-tight text-white">Synthesizer Engine</h2>
         </div>
-        <span className="text-xs font-mono text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2.5 py-0.5 rounded-full">
-          Dual Osc + ADSR + Filter
-        </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                const next = !synthBypassed;
+                setSynthBypassed(next);
+                audioEngine.synthEnabled = !next; // synthEnabled true when not bypassed
+              }}
+              className={`px-2 py-1 rounded-lg text-xs font-mono transition border ${
+                synthBypassed ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 font-bold' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700'
+              }`}
+              title="Toggle Synth engine on/off"
+            >
+              {synthBypassed ? '✓ Synth Off' : 'Synth On'}
+            </button>
+            <span className="text-xs font-mono text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2.5 py-0.5 rounded-full">
+              Dual Osc + ADSR + Filter
+            </span>
+          </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
