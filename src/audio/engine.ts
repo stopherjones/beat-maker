@@ -1,5 +1,5 @@
 import { FXSettings, SynthSettings, Track, SoundType } from '../types';
-import { noteToFreq } from '../utils/music';
+import { noteToFreq, transposeNote } from '../utils/music';
 
 class AudioEngine {
   public ctx: AudioContext | null = null;
@@ -459,6 +459,17 @@ class AudioEngine {
     const t = time || ctx.currentTime;
     
     if (track.type === 'synth') {
+      if (track.sound === 'bass') {
+        this.triggerSynth(t, 'C2', 0.25, synthSettings, track.volume, track.pan);
+        return;
+      }
+      if (track.sound === 'piano_chord') {
+        this.triggerSynth(t, 'C3', 0.25, synthSettings, track.volume, track.pan);
+        this.triggerSynth(t, 'E3', 0.25, synthSettings, track.volume * 0.8, track.pan);
+        this.triggerSynth(t, 'G3', 0.25, synthSettings, track.volume * 0.8, track.pan);
+        return;
+      }
+
       this.triggerSynth(t, 'C3', 0.25, synthSettings, track.volume, track.pan);
       return;
     }
@@ -542,7 +553,16 @@ class AudioEngine {
           const vol = track.volume * step.velocity;
 
           if (track.type === 'synth') {
-            this.renderOfflineSynth(offlineCtx, stepTime, step.note || 'C3', secondsPerStep * 0.9, synthSettings, vol);
+            const note = step.note || 'C3';
+            if (track.sound === 'bass') {
+              this.renderOfflineSynth(offlineCtx, stepTime, transposeNote(note, -12), secondsPerStep * 0.9, synthSettings, vol);
+            } else if (track.sound === 'piano_chord') {
+              this.renderOfflineSynth(offlineCtx, stepTime, note, secondsPerStep * 0.9, synthSettings, vol);
+              this.renderOfflineSynth(offlineCtx, stepTime, transposeNote(note, 4), secondsPerStep * 0.9, synthSettings, vol * 0.8);
+              this.renderOfflineSynth(offlineCtx, stepTime, transposeNote(note, 7), secondsPerStep * 0.9, synthSettings, vol * 0.8);
+            } else {
+              this.renderOfflineSynth(offlineCtx, stepTime, note, secondsPerStep * 0.9, synthSettings, vol);
+            }
           } else {
             this.renderOfflineDrum(offlineCtx, stepTime, track.sound, vol);
           }

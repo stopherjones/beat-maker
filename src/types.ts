@@ -6,7 +6,10 @@ export type SoundType =
   | 'clap'
   | 'tom'
   | 'perc'
-  | 'synth';
+  | 'synth'
+  | 'bass'
+  | 'piano_single'
+  | 'piano_chord';
 
 export type SynthWaveform = 'sawtooth' | 'square' | 'sine' | 'triangle';
 

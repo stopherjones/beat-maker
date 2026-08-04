@@ -7,6 +7,7 @@ import { SongArranger } from './components/SongArranger';
 import { Pattern, Preset, ScaleName, SongBlock, SynthSettings, FXSettings, Track, ProjectFile } from './types';
 import { DEFAULT_PRESETS } from './data/presets';
 import { audioEngine } from './audio/engine';
+import { transposeNote } from './utils/music';
 
 const STORAGE_KEY = 'beatmaker_studio_session_v2';
 
@@ -151,14 +152,16 @@ export default function App() {
 
         if (track.type === 'synth') {
           const secondsPerStep = 60 / bpm / 4;
-          audioEngine.triggerSynth(
-            time,
-            step.note || 'C3',
-            secondsPerStep * 0.9,
-            synthSettings,
-            vol,
-            track.pan
-          );
+          const note = step.note || 'C3';
+          if (track.sound === 'bass') {
+            audioEngine.triggerSynth(time, transposeNote(note, -12), secondsPerStep * 0.9, synthSettings, vol, track.pan);
+          } else if (track.sound === 'piano_chord') {
+            audioEngine.triggerSynth(time, note, secondsPerStep * 0.9, synthSettings, vol, track.pan);
+            audioEngine.triggerSynth(time, transposeNote(note, 4), secondsPerStep * 0.9, synthSettings, vol * 0.8, track.pan);
+            audioEngine.triggerSynth(time, transposeNote(note, 7), secondsPerStep * 0.9, synthSettings, vol * 0.8, track.pan);
+          } else {
+            audioEngine.triggerSynth(time, note, secondsPerStep * 0.9, synthSettings, vol, track.pan);
+          }
         } else {
           switch (track.sound) {
             case 'kick':

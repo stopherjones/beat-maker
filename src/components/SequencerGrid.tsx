@@ -25,26 +25,40 @@ export const SequencerGrid: React.FC<SequencerGridProps> = ({
 }) => {
   const [editingStep, setEditingStep] = useState<{ trackId: string; stepIdx: number } | null>(null);
   const [showAddTrackModal, setShowAddTrackModal] = useState(false);
+  const [addNotePicker, setAddNotePicker] = useState<{
+    trackId: string;
+    stepIdx: number;
+    selectedNote: string;
+  } | null>(null);
 
   // Toggle step on/off
   const handleStepClick = (trackId: string, stepIdx: number) => {
     audioEngine.ensureContext();
-    const updated = tracks.map((track) => {
-      if (track.id !== trackId) return track;
-      const newSteps = [...track.steps];
-      const targetStep = newSteps[stepIdx];
-      const nextActive = !targetStep.active;
-      newSteps[stepIdx] = {
-        ...targetStep,
-        active: nextActive,
-      };
+    const track = tracks.find((t) => t.id === trackId);
+    if (!track) return;
+    const targetStep = track.steps[stepIdx];
+    const nextActive = !targetStep.active;
+
+    // If activating a synth-like step, open note picker instead of toggling immediately
+    if (nextActive && track.type === 'synth') {
+      const defaultNote = targetStep.note || SCALES[selectedScale][stepIdx % SCALES[selectedScale].length];
+      setAddNotePicker({ trackId, stepIdx, selectedNote: defaultNote });
+      return;
+    }
+
+    const updated = tracks.map((t) => {
+      if (t.id !== trackId) return t;
+      const newSteps = [...t.steps];
+      const target = newSteps[stepIdx];
+      newSteps[stepIdx] = { ...target, active: nextActive };
 
       // Trigger preview sound if activated
       if (nextActive) {
-        audioEngine.triggerTrackSample(track, synthSettings);
+        const previewTrack = { ...t, steps: newSteps };
+        audioEngine.triggerTrackSample(previewTrack, synthSettings);
       }
 
-      return { ...track, steps: newSteps };
+      return { ...t, steps: newSteps };
     });
     onTracksChange(updated);
   };
@@ -84,7 +98,7 @@ export const SequencerGrid: React.FC<SequencerGridProps> = ({
   };
 
   // Add Track
-  const handleAddTrack = (sound: SoundType, name: string, color: string, type: 'drum' | 'synth') => {
+  const handleAddTrack = (sound: SoundType, name: string, color: string, type: 'drum' | 'synth', initialNote?: string) => {
     const stepCount = tracks[0]?.steps.length || 16;
     const newTrack: Track = {
       id: `t_${Date.now()}`,
@@ -98,12 +112,35 @@ export const SequencerGrid: React.FC<SequencerGridProps> = ({
       color,
       steps: Array.from({ length: stepCount }, (_, i) => ({
         active: false,
-        note: type === 'synth' ? SCALES[selectedScale][i % SCALES[selectedScale].length] : 'C2',
+        note: (() => {
+          if (type !== 'synth') return 'C2';
+          if (initialNote) return initialNote;
+          return SCALES[selectedScale][i % SCALES[selectedScale].length];
+        })(),
         velocity: 0.8,
       })),
     };
     onTracksChange([...tracks, newTrack]);
     setShowAddTrackModal(false);
+  };
+
+  // Confirm adding a note when activating a synth step
+  const confirmAddStep = (note: string) => {
+    if (!addNotePicker) return;
+    const { trackId, stepIdx } = addNotePicker;
+    const updated = tracks.map((t) => {
+      if (t.id !== trackId) return t;
+      const newSteps = [...t.steps];
+      const target = newSteps[stepIdx] || { active: false, note, velocity: 0.8 } as Step;
+      newSteps[stepIdx] = { ...target, active: true, note };
+      return { ...t, steps: newSteps };
+    });
+    onTracksChange(updated);
+    const updatedTrack = updated.find((t) => t.id === trackId);
+    if (updatedTrack) {
+      audioEngine.triggerTrackSample(updatedTrack, synthSettings);
+    }
+    setAddNotePicker(null);
   };
 
   // Change step velocity or pitch note
@@ -394,6 +431,7 @@ export const SequencerGrid: React.FC<SequencerGridProps> = ({
                     </div>
                   )}
 
+                    
                   {/* Velocity Slider */}
                   <div>
                     <div className="flex justify-between items-center mb-1">
@@ -426,6 +464,36 @@ export const SequencerGrid: React.FC<SequencerGridProps> = ({
                 </div>
               );
             })()}
+          </div>
+        </div>
+      )}
+      {/* Add-Step Note Picker Modal */}
+      {addNotePicker && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 max-w-sm w-full text-zinc-100 shadow-2xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-sm">Choose note for step {addNotePicker.stepIdx + 1}</h3>
+              <button onClick={() => setAddNotePicker(null)} className="text-zinc-400 hover:text-white text-xs">Cancel ✕</button>
+            </div>
+
+            <div className="space-y-3">
+              <label className="text-xs font-mono text-zinc-400 block">Choose note ({selectedScale})</label>
+              <div className="grid grid-cols-1 gap-2 max-h-56 overflow-y-auto">
+                {SCALES[selectedScale].map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => confirmAddStep(n)}
+                    className="w-full py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-white text-sm font-mono flex items-center justify-center shadow-sm"
+                    title={`Set step to ${n}`}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setAddNotePicker(null)} className="px-3 py-1 bg-zinc-800 rounded-lg text-xs">Cancel</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -506,6 +574,33 @@ export const SequencerGrid: React.FC<SequencerGridProps> = ({
                 <div className="w-3 h-3 rounded-full bg-emerald-500" />
                 <span className="font-bold text-xs text-white">Percussion</span>
                 <span className="text-[10px] text-zinc-500">Short FM wood block</span>
+              </button>
+
+              <button
+                onClick={() => handleAddTrack('bass', 'Bass', '#38bdf8', 'synth')}
+                className="p-3 bg-sky-950/40 hover:bg-sky-900/50 border border-sky-500/30 rounded-xl text-left transition flex flex-col gap-1"
+              >
+                <div className="w-3 h-3 rounded-full bg-sky-400" />
+                <span className="font-bold text-xs text-sky-300">Bass</span>
+                <span className="text-[10px] text-sky-400/80">Deep low-end synth bass</span>
+              </button>
+
+              <button
+                onClick={() => handleAddTrack('piano_single', 'Piano (single note)', '#f59e0b', 'synth')}
+                className="p-3 bg-amber-950/40 hover:bg-amber-900/50 border border-amber-500/30 rounded-xl text-left transition flex flex-col gap-1"
+              >
+                <div className="w-3 h-3 rounded-full bg-amber-400" />
+                <span className="font-bold text-xs text-amber-200">Piano (single note)</span>
+                <span className="text-[10px] text-amber-300/80">Simple piano-style lead</span>
+              </button>
+
+              <button
+                onClick={() => handleAddTrack('piano_chord', 'Piano (chord)', '#fde68a', 'synth')}
+                className="p-3 bg-amber-950/40 hover:bg-amber-900/50 border border-amber-500/30 rounded-xl text-left transition flex flex-col gap-1"
+              >
+                <div className="w-3 h-3 rounded-full bg-amber-300" />
+                <span className="font-bold text-xs text-amber-100">Piano (chord)</span>
+                <span className="text-[10px] text-amber-200/80">Chordal piano-style harmony</span>
               </button>
 
               <button

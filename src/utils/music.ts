@@ -34,6 +34,13 @@ export function noteToFreq(note: string): number {
   return 440 * Math.pow(2, (midiNote - 69) / 12);
 }
 
+export function transposeNote(note: string, semitones: number): string {
+  const idx = NOTES_CHROMATIC.indexOf(note);
+  if (idx === -1) return note;
+  const newIndex = Math.max(0, Math.min(NOTES_CHROMATIC.length - 1, idx + semitones));
+  return NOTES_CHROMATIC[newIndex];
+}
+
 // Format seconds into MM:SS
 export function formatTime(seconds: number): string {
   const mins = Math.floor(seconds / 60);
