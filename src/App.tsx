@@ -4,12 +4,18 @@ import { SequencerGrid } from './components/SequencerGrid';
 import { SynthPanel } from './components/SynthPanel';
 import { FXPanel } from './components/FXPanel';
 import { SongArranger } from './components/SongArranger';
-import { GitHubPagesGuideModal } from './components/GitHubPagesGuideModal';
 import { Pattern, Preset, ScaleName, SongBlock, SynthSettings, FXSettings, Track, ProjectFile } from './types';
 import { DEFAULT_PRESETS } from './data/presets';
 import { audioEngine } from './audio/engine';
 
 const STORAGE_KEY = 'beatmaker_studio_session_v2';
+
+const PUBLIC_PROJECTS = [
+  {
+    label: 'Saved Project: Beatmaker Session',
+    path: '/beatmaker-project-1785843224369.json',
+  },
+];
 
 export default function App() {
   // Load initial preset
@@ -41,10 +47,8 @@ export default function App() {
   const [currentSongBlockIndex, setCurrentSongBlockIndex] = useState<number>(0);
   const [blockRepeatCounter, setBlockRepeatCounter] = useState<number>(0);
 
-  // Modal & Export
-  const [isGHGuideOpen, setIsGHGuideOpen] = useState<boolean>(false);
+  // Export
   const [isExporting, setIsExporting] = useState<boolean>(false);
-  const [hasSavedSession, setHasSavedSession] = useState<boolean>(false);
   const isInitialMountRef = useRef<boolean>(true);
 
   // Restore Session on Mount from LocalStorage
@@ -67,7 +71,6 @@ export default function App() {
           if (Array.isArray(parsed.songBlocks)) setSongBlocks(parsed.songBlocks);
           if (parsed.isSongMode !== undefined) setIsSongMode(parsed.isSongMode);
           if (parsed.selectedScale) setSelectedScale(parsed.selectedScale);
-          setHasSavedSession(true);
         }
       }
     } catch (e) {
@@ -95,7 +98,6 @@ export default function App() {
         savedAt: new Date().toISOString(),
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(sessionData));
-      setHasSavedSession(true);
     } catch (e) {
       console.error('Failed to save session to local storage:', e);
     }
@@ -406,11 +408,9 @@ export default function App() {
     downloadAnchor.remove();
   };
 
-  // Import Project or Pattern JSON
   const handleImportFile = (imported: any) => {
     if (!imported) return;
 
-    // Option A: Full Project File
     if (imported.patterns && Array.isArray(imported.patterns) && imported.patterns.length > 0) {
       setPatterns(imported.patterns);
       const validActiveId = imported.patterns.some((p: Pattern) => p.id === imported.activePatternId)
@@ -429,7 +429,6 @@ export default function App() {
       return;
     }
 
-    // Option B: Single Pattern File
     if (imported.tracks && Array.isArray(imported.tracks)) {
       const newPattern: Pattern = {
         id: imported.id || `p_${Date.now()}`,
@@ -441,7 +440,6 @@ export default function App() {
         fxSettings: imported.fxSettings || fxSettings,
         tracks: imported.tracks,
       };
-
       setPatterns((prev) => [...prev, newPattern]);
       setActivePatternId(newPattern.id);
       if (imported.bpm) setBpm(imported.bpm);
@@ -454,7 +452,6 @@ export default function App() {
     alert('Unrecognized JSON format. File must be a valid Beatmaker Project or Pattern file.');
   };
 
-  // Reset Session
   const handleResetSession = () => {
     if (window.confirm('Reset studio session to factory presets? Any unsaved changes will be lost.')) {
       try {
@@ -463,6 +460,20 @@ export default function App() {
         console.error(e);
       }
       handleSelectPreset(DEFAULT_PRESETS[0]);
+    }
+  };
+
+  const handleOpenPublicProject = async (projectPath: string) => {
+    try {
+      const response = await fetch(projectPath);
+      if (!response.ok) {
+        throw new Error(`Unable to load project: ${response.statusText}`);
+      }
+      const imported = await response.json();
+      handleImportFile(imported);
+    } catch (error) {
+      console.error(error);
+      alert('Failed to open saved project from public assets.');
     }
   };
 
@@ -507,16 +518,14 @@ export default function App() {
         }}
         currentPresetId={currentPresetId}
         onSelectPreset={handleSelectPreset}
-        pattern={activePattern}
         onExportProject={handleExportProject}
-        onImportFile={handleImportFile}
+        publicProjects={PUBLIC_PROJECTS}
+        onOpenPublicProject={handleOpenPublicProject}
         onResetSession={handleResetSession}
-        onOpenGHGuide={() => setIsGHGuideOpen(true)}
         isExporting={isExporting}
         onExportWav={handleExportWav}
         masterVol={masterVol}
         onMasterVolChange={setMasterVol}
-        hasSavedSession={hasSavedSession}
       />
 
       {/* Main Studio Workspace */}
@@ -574,11 +583,6 @@ export default function App() {
         <p>Beat & Synth Sequencer • Built with React & Web Audio API • 100% Free GitHub Pages Ready</p>
       </footer>
 
-      {/* GitHub Pages Hosting Guide Modal */}
-      <GitHubPagesGuideModal
-        isOpen={isGHGuideOpen}
-        onClose={() => setIsGHGuideOpen(false)}
-      />
     </div>
   );
 }

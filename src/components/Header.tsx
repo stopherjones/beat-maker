@@ -1,6 +1,6 @@
-import React, { useRef, useState } from 'react';
-import { Play, Pause, Square, Download, Upload, Globe, Volume2, Sparkles, FolderDown, RotateCcw, CheckCircle2 } from 'lucide-react';
-import { Preset, Pattern, ProjectFile } from '../types';
+import React, { useState, useRef } from 'react';
+import { Play, Pause, Square, Download, Volume2, Sparkles, FolderDown, RotateCcw } from 'lucide-react';
+import { Preset } from '../types';
 import { DEFAULT_PRESETS } from '../data/presets';
 import { audioEngine } from '../audio/engine';
 
@@ -16,16 +16,14 @@ interface HeaderProps {
   onStepCountChange: (count: number) => void;
   currentPresetId: string;
   onSelectPreset: (preset: Preset) => void;
-  pattern: Pattern;
   onExportProject: () => void;
-  onImportFile: (importedData: any) => void;
+  publicProjects: { label: string; path: string }[];
+  onOpenPublicProject: (projectPath: string) => void;
   onResetSession: () => void;
-  onOpenGHGuide: () => void;
   isExporting: boolean;
   onExportWav: () => void;
   masterVol: number;
   onMasterVolChange: (vol: number) => void;
-  hasSavedSession: boolean;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -40,19 +38,17 @@ export const Header: React.FC<HeaderProps> = ({
   onStepCountChange,
   currentPresetId,
   onSelectPreset,
-  pattern,
   onExportProject,
-  onImportFile,
+  publicProjects,
+  onOpenPublicProject,
   onResetSession,
-  onOpenGHGuide,
   isExporting,
   onExportWav,
   masterVol,
   onMasterVolChange,
-  hasSavedSession
 }) => {
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
-  
+  const [selectedPublicProject, setSelectedPublicProject] = useState<string>('');
+
   // Tap Tempo calculation
   const tapTimesRef = useRef<number[]>([]);
   const [tapNotice, setTapNotice] = useState(false);
@@ -86,55 +82,89 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const imported = JSON.parse(event.target?.result as string);
-        onImportFile(imported);
-      } catch (err) {
-        alert('Invalid JSON file format. Please upload a valid Beatmaker Project or Pattern file.');
-      }
-    };
-    reader.readAsText(file);
-    // reset value so same file can be loaded twice if needed
-    e.target.value = '';
-  };
-
   return (
     <header className="bg-zinc-900 border-b border-zinc-800 text-zinc-100 p-3 sm:p-4 sticky top-0 z-40 shadow-xl">
       <div className="max-w-7xl mx-auto flex flex-col lg:flex-row items-center justify-between gap-4">
         
-        {/* Brand Logo & Auto-Save Badge */}
-        <div className="flex items-center justify-between w-full lg:w-auto gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-purple-600 to-pink-500 flex items-center justify-center text-white shadow-lg shadow-purple-500/20">
-              <Sparkles className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="font-bold text-base tracking-tight text-white flex items-center gap-2">
-                Beat & Synth <span className="text-xs px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20 font-mono">GH Pages Ready</span>
-              </h1>
-              <div className="flex items-center gap-2 text-[11px] text-zinc-400">
-                <span className="hidden sm:inline">Auto-saves session to browser</span>
-                <span className="inline-flex items-center gap-1 text-emerald-400 font-mono text-[10px] bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20">
-                  <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Saved Locally
-                </span>
-              </div>
-            </div>
+
+        {/* Presets and Export Controls */}
+        <div className="flex flex-wrap items-center justify-center gap-2 w-full lg:w-auto pb-1 lg:pb-0">
+          
+          {/* Preset Selector Dropdown */}
+          <div className="min-w-[180px] flex items-center gap-1.5 bg-zinc-950/80 px-2 py-1.5 rounded-xl border border-zinc-800">
+            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+            <select
+              value={currentPresetId}
+              onChange={(e) => {
+                const found = DEFAULT_PRESETS.find((p) => p.id === e.target.value);
+                if (found) onSelectPreset(found);
+              }}
+              className="bg-transparent text-xs text-zinc-200 font-medium focus:outline-none cursor-pointer"
+            >
+              <option value="" disabled className="bg-zinc-900 text-zinc-400">Load Preset...</option>
+              {DEFAULT_PRESETS.map((p) => (
+                <option key={p.id} value={p.id} className="bg-zinc-900 text-zinc-100">
+                  {p.name} ({p.genre})
+                </option>
+              ))}
+            </select>
           </div>
 
-          <div className="flex items-center gap-2 lg:hidden">
-            <button
-              onClick={onOpenGHGuide}
-              className="p-2 bg-zinc-800 hover:bg-zinc-700 text-purple-400 rounded-lg text-xs font-medium flex items-center gap-1.5 transition border border-zinc-700"
-              title="How to host on GitHub Pages"
+          {/* Export WAV Button */}
+          <button
+            onClick={onExportWav}
+            disabled={isExporting}
+            className="min-w-[140px] px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-600/20 transition disabled:opacity-50"
+            title="Export full audio to WAV file"
+          >
+            <Download className="w-3.5 h-3.5" />
+            {isExporting ? 'Exporting...' : 'Export WAV'}
+          </button>
+
+          {/* Open Project Dropdown */}
+          <div className="min-w-[180px] flex items-center gap-2 bg-zinc-950/80 px-2 py-1.5 rounded-xl border border-zinc-800 text-zinc-200 text-xs">
+            <span className="text-zinc-400 whitespace-nowrap">Open Saved</span>
+            <select
+              value={selectedPublicProject}
+              onChange={(e) => {
+                const selectedPath = e.target.value;
+                setSelectedPublicProject(selectedPath);
+                if (selectedPath) {
+                  onOpenPublicProject(selectedPath);
+                }
+              }}
+              className="bg-transparent text-xs text-zinc-100 focus:outline-none cursor-pointer"
             >
-              <Globe className="w-4 h-4" />
-            </button>
+              <option value="" disabled>
+                Choose project...
+              </option>
+              {publicProjects.map((project) => (
+                <option key={project.path} value={project.path} className="bg-zinc-900 text-zinc-100">
+                  {project.label}
+                </option>
+              ))}
+            </select>
           </div>
+
+          {/* Export Full Project File */}
+          <button
+            onClick={onExportProject}
+            className="min-w-[150px] px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-purple-300 border border-purple-500/30 rounded-xl text-xs font-medium flex items-center gap-1.5 transition"
+            title="Export entire project file (.json) to save to GitHub or disk"
+          >
+            <FolderDown className="w-3.5 h-3.5 text-purple-400" />
+            <span>Export Project</span>
+          </button>
+
+          {/* Reset Session Button */}
+          <button
+            onClick={onResetSession}
+            className="min-w-[50px] p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-rose-400 rounded-xl transition border border-zinc-800"
+            title="Reset session to default factory state"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+          </button>
+
         </div>
 
         {/* Transport Controls (Play, Stop, BPM, Swing) */}
@@ -250,86 +280,6 @@ export const Header: React.FC<HeaderProps> = ({
               title="Master Volume"
             />
           </div>
-        </div>
-
-        {/* Presets, Project Export/Import & GH Pages Guide */}
-        <div className="flex items-center gap-2 w-full lg:w-auto justify-end overflow-x-auto pb-1 lg:pb-0">
-          
-          {/* Preset Selector Dropdown */}
-          <div className="flex items-center gap-1.5 bg-zinc-950/80 px-2 py-1.5 rounded-xl border border-zinc-800">
-            <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-            <select
-              value={currentPresetId}
-              onChange={(e) => {
-                const found = DEFAULT_PRESETS.find((p) => p.id === e.target.value);
-                if (found) onSelectPreset(found);
-              }}
-              className="bg-transparent text-xs text-zinc-200 font-medium focus:outline-none cursor-pointer"
-            >
-              <option value="" disabled className="bg-zinc-900 text-zinc-400">Load Preset...</option>
-              {DEFAULT_PRESETS.map((p) => (
-                <option key={p.id} value={p.id} className="bg-zinc-900 text-zinc-100">
-                  {p.name} ({p.genre})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Export WAV Button */}
-          <button
-            onClick={onExportWav}
-            disabled={isExporting}
-            className="px-3 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-lg shadow-emerald-600/20 transition disabled:opacity-50 whitespace-nowrap"
-            title="Export full audio to WAV file"
-          >
-            <Download className="w-3.5 h-3.5" />
-            {isExporting ? 'Exporting...' : 'Export WAV'}
-          </button>
-
-          {/* Export Full Project File */}
-          <button
-            onClick={onExportProject}
-            className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-purple-300 border border-purple-500/30 rounded-xl text-xs font-medium flex items-center gap-1.5 transition whitespace-nowrap"
-            title="Export entire project file (.json) to save to GitHub or disk"
-          >
-            <FolderDown className="w-3.5 h-3.5 text-purple-400" />
-            <span>Export Project</span>
-          </button>
-
-          {/* Import Project or Pattern */}
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 rounded-xl text-xs font-medium flex items-center gap-1.5 transition whitespace-nowrap"
-            title="Import Project or Pattern (.json)"
-          >
-            <Upload className="w-3.5 h-3.5 text-zinc-400" />
-            <span>Import .json</span>
-          </button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json"
-            onChange={handleFileUpload}
-            className="hidden"
-          />
-
-          {/* Reset Session Button */}
-          <button
-            onClick={onResetSession}
-            className="p-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-rose-400 rounded-xl transition border border-zinc-800"
-            title="Reset session to default factory state"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-          </button>
-
-          {/* GH Pages Guide Modal trigger */}
-          <button
-            onClick={onOpenGHGuide}
-            className="hidden lg:flex px-3 py-1.5 bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 rounded-xl text-xs font-medium items-center gap-1.5 transition whitespace-nowrap"
-          >
-            <Globe className="w-3.5 h-3.5 text-purple-400" />
-            GH Pages Guide
-          </button>
         </div>
 
       </div>
