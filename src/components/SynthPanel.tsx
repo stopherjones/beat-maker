@@ -61,9 +61,9 @@ export const SynthPanel: React.FC<SynthPanelProps> = ({ synth, onChange, selecte
               className={`px-2 py-1 rounded-lg text-xs font-mono transition border ${
                 synthBypassed ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 font-bold' : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border-zinc-700'
               }`}
-              title="Toggle Synth engine on/off"
+              title="Toggle synth effects on/off"
             >
-              {synthBypassed ? '✓ Synth Off' : 'Synth On'}
+              {synthBypassed ? '✓ Synth FX Off' : 'Synth FX On'}
             </button>
             <span className="text-xs font-mono text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2.5 py-0.5 rounded-full">
               Dual Osc + ADSR + Filter

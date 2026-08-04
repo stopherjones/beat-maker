@@ -357,7 +357,6 @@ class AudioEngine {
     volume: number = 1.0,
     pan: number = 0
   ) {
-    if (!this.synthEnabled) return;
     const ctx = this.ensureContext();
     const freq = noteToFreq(note);
 
@@ -389,41 +388,45 @@ class AudioEngine {
     osc2.connect(oscMix);
     subGain.connect(oscMix);
 
-    // Biquad Filter (Lowpass)
-    const filter = ctx.createBiquadFilter();
-    filter.type = 'lowpass';
-    filter.Q.setValueAtTime(synth.resonance, time);
+    let filter: BiquadFilterNode | null = null;
 
-    // Filter Envelope Sweep
-    const baseCutoff = Math.max(20, Math.min(18000, synth.cutoff));
-    const peakCutoff = Math.max(20, Math.min(18000, baseCutoff + synth.envAmount));
+    if (this.synthEnabled) {
+      // Biquad Filter (Lowpass)
+      filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.Q.setValueAtTime(synth.resonance, time);
 
-    filter.frequency.setValueAtTime(baseCutoff, time);
-    filter.frequency.exponentialRampToValueAtTime(peakCutoff, time + Math.max(0.01, synth.attack));
-    filter.frequency.exponentialRampToValueAtTime(
-      Math.max(20, baseCutoff + (peakCutoff - baseCutoff) * synth.sustain),
-      time + synth.attack + synth.decay
-    );
+      // Filter Envelope Sweep
+      const baseCutoff = Math.max(20, Math.min(18000, synth.cutoff));
+      const peakCutoff = Math.max(20, Math.min(18000, baseCutoff + synth.envAmount));
 
-    // LFO Modulation
-    if (synth.lfoDepth > 0) {
-      const lfo = ctx.createOscillator();
-      lfo.type = 'sine';
-      lfo.frequency.setValueAtTime(synth.lfoRate, time);
+      filter.frequency.setValueAtTime(baseCutoff, time);
+      filter.frequency.exponentialRampToValueAtTime(peakCutoff, time + Math.max(0.01, synth.attack));
+      filter.frequency.exponentialRampToValueAtTime(
+        Math.max(20, baseCutoff + (peakCutoff - baseCutoff) * synth.sustain),
+        time + synth.attack + synth.decay
+      );
 
-      const lfoGain = ctx.createGain();
-      if (synth.lfoTarget === 'cutoff') {
-        lfoGain.gain.setValueAtTime(synth.lfoDepth * 1500, time);
-        lfo.connect(lfoGain);
-        lfoGain.connect(filter.frequency);
-      } else {
-        lfoGain.gain.setValueAtTime(synth.lfoDepth * 50, time); // Pitch vibrato
-        lfo.connect(lfoGain);
-        lfoGain.connect(osc1.detune);
-        lfoGain.connect(osc2.detune);
+      // LFO Modulation
+      if (synth.lfoDepth > 0) {
+        const lfo = ctx.createOscillator();
+        lfo.type = 'sine';
+        lfo.frequency.setValueAtTime(synth.lfoRate, time);
+
+        const lfoGain = ctx.createGain();
+        if (synth.lfoTarget === 'cutoff') {
+          lfoGain.gain.setValueAtTime(synth.lfoDepth * 1500, time);
+          lfo.connect(lfoGain);
+          lfoGain.connect(filter.frequency);
+        } else {
+          lfoGain.gain.setValueAtTime(synth.lfoDepth * 50, time); // Pitch vibrato
+          lfo.connect(lfoGain);
+          lfoGain.connect(osc1.detune);
+          lfoGain.connect(osc2.detune);
+        }
+        lfo.start(time);
+        lfo.stop(time + durationSeconds + synth.release);
       }
-      lfo.start(time);
-      lfo.stop(time + durationSeconds + synth.release);
     }
 
     // Main ADSR Gain Envelope
@@ -441,8 +444,12 @@ class AudioEngine {
     adsrGain.gain.exponentialRampToValueAtTime(0.0001, releaseEnd);
 
     // Routing: Oscs -> Filter -> ADSR -> FX
-    oscMix.connect(filter);
-    filter.connect(adsrGain);
+    if (filter) {
+      oscMix.connect(filter);
+      filter.connect(adsrGain);
+    } else {
+      oscMix.connect(adsrGain);
+    }
 
     this.connectToFX(adsrGain, pan);
 
@@ -556,20 +563,14 @@ class AudioEngine {
 
           if (track.type === 'synth') {
             const note = step.note || 'C3';
-              if (track.sound === 'bass') {
-                if (this.synthEnabled) {
-                  this.renderOfflineSynth(offlineCtx, stepTime, transposeNote(note, -12), secondsPerStep * 0.9, synthSettings, vol);
-                }
-              } else if (track.sound === 'piano_chord') {
-                if (this.synthEnabled) {
-                  this.renderOfflineSynth(offlineCtx, stepTime, note, secondsPerStep * 0.9, synthSettings, vol);
-                  this.renderOfflineSynth(offlineCtx, stepTime, transposeNote(note, 4), secondsPerStep * 0.9, synthSettings, vol * 0.8);
-                  this.renderOfflineSynth(offlineCtx, stepTime, transposeNote(note, 7), secondsPerStep * 0.9, synthSettings, vol * 0.8);
-                }
-              } else {
-                if (this.synthEnabled) {
-                  this.renderOfflineSynth(offlineCtx, stepTime, note, secondsPerStep * 0.9, synthSettings, vol);
-                }
+            if (track.sound === 'bass') {
+              this.renderOfflineSynth(offlineCtx, stepTime, transposeNote(note, -12), secondsPerStep * 0.9, synthSettings, vol);
+            } else if (track.sound === 'piano_chord') {
+              this.renderOfflineSynth(offlineCtx, stepTime, note, secondsPerStep * 0.9, synthSettings, vol);
+              this.renderOfflineSynth(offlineCtx, stepTime, transposeNote(note, 4), secondsPerStep * 0.9, synthSettings, vol * 0.8);
+              this.renderOfflineSynth(offlineCtx, stepTime, transposeNote(note, 7), secondsPerStep * 0.9, synthSettings, vol * 0.8);
+            } else {
+              this.renderOfflineSynth(offlineCtx, stepTime, note, secondsPerStep * 0.9, synthSettings, vol);
             }
           } else {
             this.renderOfflineDrum(offlineCtx, stepTime, track.sound, vol);
@@ -633,13 +634,9 @@ class AudioEngine {
     const freq = noteToFreq(note);
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    const filter = ctx.createBiquadFilter();
 
     osc.type = synth.osc1Wave;
     osc.frequency.setValueAtTime(freq, time);
-
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(synth.cutoff, time);
 
     gain.gain.setValueAtTime(0.001, time);
     gain.gain.linearRampToValueAtTime(vol, time + synth.attack);
@@ -647,8 +644,16 @@ class AudioEngine {
     gain.gain.setValueAtTime(Math.max(0.001, vol * synth.sustain), time + duration);
     gain.gain.exponentialRampToValueAtTime(0.0001, time + duration + synth.release);
 
-    osc.connect(filter);
-    filter.connect(gain);
+    if (this.synthEnabled) {
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(synth.cutoff, time);
+      osc.connect(filter);
+      filter.connect(gain);
+    } else {
+      osc.connect(gain);
+    }
+
     gain.connect(ctx.destination);
 
     osc.start(time);
