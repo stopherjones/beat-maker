@@ -11,13 +11,6 @@ import { transposeNote } from './utils/music';
 
 const STORAGE_KEY = 'beatmaker_studio_session_v2';
 
-const PUBLIC_PROJECTS = [
-  {
-    label: 'Saved Project: Beatmaker Session',
-    path: '/beatmaker-project-1785843224369.json',
-  },
-];
-
 export default function App() {
   // Load initial preset
   const defaultPreset = DEFAULT_PRESETS[0];
@@ -48,9 +41,25 @@ export default function App() {
   const [currentSongBlockIndex, setCurrentSongBlockIndex] = useState<number>(0);
   const [blockRepeatCounter, setBlockRepeatCounter] = useState<number>(0);
 
+  // Dynamic Public Projects Manifest State
+  const [publicProjects, setPublicProjects] = useState<{ label: string; path: string }[]>([]);
+
   // Export
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const isInitialMountRef = useRef<boolean>(true);
+
+  // Fetch project manifest on mount
+  useEffect(() => {
+    fetch('./project-manifest.json')
+      .then((res) => {
+        if (!res.ok) throw new Error('Manifest not found');
+        return res.json();
+      })
+      .then((data) => setPublicProjects(data))
+      .catch((err) => {
+        console.warn('Could not load project manifest, falling back to empty list', err);
+      });
+  }, []);
 
   // Restore Session on Mount from LocalStorage
   useEffect(() => {
@@ -522,7 +531,7 @@ export default function App() {
         currentPresetId={currentPresetId}
         onSelectPreset={handleSelectPreset}
         onExportProject={handleExportProject}
-        publicProjects={PUBLIC_PROJECTS}
+        publicProjects={publicProjects}
         onOpenPublicProject={handleOpenPublicProject}
         onResetSession={handleResetSession}
         isExporting={isExporting}
